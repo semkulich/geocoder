@@ -10,6 +10,7 @@
 
 namespace Geocoder\Provider;
 
+use Drupal\Core\Url;
 use Exception;
 use Geocoder\Exception\InvalidCredentials;
 use Geocoder\Exception\NoResult;
@@ -18,19 +19,29 @@ use Geocoder\Exception\UnsupportedOperation;
 use Ivory\HttpAdapter\HttpAdapterInterface;
 
 /**
- * @author William Durand <william.durand1@gmail.com>
+ * @author Mykhailo Semkulych <semkulich.m@gmail.com>
  */
-class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
+class GooglePlace extends AbstractHttpProvider implements LocaleAwareProvider
 {
     /**
      * @var string
      */
-    const ENDPOINT_URL = 'http://maps.googleapis.com/maps/api/geocode/json?address=%s';
+    const ENDPOINT_TEXTSEARCH_URL = 'http://maps.googleapis.com/maps/api/place/textsearch/json?query=%s';
 
     /**
      * @var string
      */
-    const ENDPOINT_URL_SSL = 'https://maps.googleapis.com/maps/api/geocode/json?address=%s';
+    const ENDPOINT_TEXTSEARCH_URL_SSL = 'https://maps.googleapis.com/maps/api/place/textsearch/json?query=%s';
+
+    /**
+     * @var string
+     */
+    const ENDPOINT_PLACE_DETAILS_URL = 'http://maps.googleapis.com/maps/api/place/details/json?placeid=%s';
+
+    /**
+     * @var string
+     */
+    const ENDPOINT_PLACE_DETAILS_URL_SSL = 'https://maps.googleapis.com/maps/api/place/details/json?placeid=%s';
 
     use LocaleTrait;
 
@@ -49,20 +60,14 @@ class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
      */
     private $apiKey;
 
-  /**
-   * @var string
-   */
-  private $placeId;
-
     /**
      * @param HttpAdapterInterface $adapter An HTTP adapter
      * @param string               $locale  A locale (optional)
      * @param string               $region  Region biasing (optional)
      * @param bool                 $useSsl  Whether to use an SSL connection (optional)
-     * @param string               $apiKey  Google Geocoding API key (optional)
-     * @param string               $placeId  Google Place id (optional)
+     * @param string               $apiKey  Google Place API key (optional)
      */
-    public function __construct(HttpAdapterInterface $adapter, $locale = null, $region = null, $useSsl = false, $apiKey = null, $placeId = null)
+    public function __construct(HttpAdapterInterface $adapter, $locale = null, $region = null, $useSsl = false, $apiKey = null)
     {
         parent::__construct($adapter);
 
@@ -70,7 +75,6 @@ class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
         $this->region = $region;
         $this->useSsl = $useSsl;
         $this->apiKey = $apiKey;
-        $this->placeId = $placeId;
     }
 
     /**
@@ -81,11 +85,11 @@ class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
         // Google API returns invalid data if IP address given
         // This API doesn't handle IPs
         if (filter_var($address, FILTER_VALIDATE_IP)) {
-            throw new UnsupportedOperation('The GoogleMaps provider does not support IP addresses, only street addresses.');
+            throw new UnsupportedOperation('The GooglePlace provider does not support IP addresses, only addresses.');
         }
 
         $query = sprintf(
-            $this->useSsl ? self::ENDPOINT_URL_SSL : self::ENDPOINT_URL,
+            $this->useSsl ? self::ENDPOINT_TEXTSEARCH_URL_SSL : self::ENDPOINT_TEXTSEARCH_URL,
             rawurlencode($address)
         );
 
@@ -105,7 +109,7 @@ class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
      */
     public function getName()
     {
-        return 'google_maps';
+        return 'google_place';
     }
 
     public function setRegion($region)
@@ -123,15 +127,15 @@ class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
     protected function buildQuery($query)
     {
         if (null !== $this->getLocale()) {
-            $query = sprintf('%s&language=%s', $query, $this->getLocale());
+          $query = sprintf('%s&language=%s', $query, $this->getLocale());
         }
 
         if (null !== $this->region) {
-            $query = sprintf('%s&region=%s', $query, $this->region);
+          $query = sprintf('%s&region=%s', $query, $this->region);
         }
 
         if (null !== $this->apiKey) {
-            $query = sprintf('%s&key=%s', $query, $this->apiKey);
+          $query = sprintf('%s&key=%s', $query, $this->apiKey);
         }
 
         return $query;
@@ -143,12 +147,8 @@ class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
     private function executeQuery($query)
     {
         $query   = $this->buildQuery($query);
-        $content = (string) $this->getAdapter()->get($query)->getBody();
 
-        // Throw exception if invalid clientID and/or privateKey used with GoogleMapsBusinessProvider
-        if (strpos($content, "Provided 'signature' is not valid for the provided client ID") !== false) {
-            throw new InvalidCredentials(sprintf('Invalid client ID / API Key %s', $query));
-        }
+        $content = (string) $this->getAdapter()->get($query)->getBody();
 
         if (empty($content)) {
             throw new NoResult(sprintf('Could not execute query "%s".', $query));
@@ -181,14 +181,24 @@ class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
         }
 
         $results = [];
+
         foreach ($json->results as $result) {
             $resultSet = $this->getDefaults();
 
+            // build place details query
+            $query_details = sprintf(
+                $this->useSsl ? self::ENDPOINT_PLACE_DETAILS_URL_SSL : self::ENDPOINT_PLACE_DETAILS_URL,
+                rawurlencode($result->place_id)
+            );
+            $query_details = $this->buildQuery($query_details);
+            $place_details_content = (string) $this->getAdapter()->get($query_details)->getBody();
             // update address components
-            foreach ($result->address_components as $component) {
-                foreach ($component->types as $type) {
-                    $this->updateAddressComponent($resultSet, $type, $component);
-                }
+            $json_place_details = json_decode($place_details_content);
+            $address_components = $json_place_details->result->address_components;
+            foreach ($address_components as $component) {
+              foreach ($component->types as $type) {
+                $this->updateAddressComponent($resultSet, $type, $component);
+              }
             }
 
             // update coordinates
@@ -197,21 +207,29 @@ class GoogleMaps extends AbstractHttpProvider implements LocaleAwareProvider
             $resultSet['longitude'] = $coordinates->lng;
 
             $resultSet['bounds'] = null;
-            if (isset($result->geometry->bounds)) {
-                $resultSet['bounds'] = array(
-                    'south' => $result->geometry->bounds->southwest->lat,
-                    'west'  => $result->geometry->bounds->southwest->lng,
-                    'north' => $result->geometry->bounds->northeast->lat,
-                    'east'  => $result->geometry->bounds->northeast->lng
-                );
-            } elseif ('ROOFTOP' === $result->geometry->location_type) {
+            if (isset($result->geometry->viewport)) {
+                $resultSet['bounds'] = [
+                  'south' => $result->geometry->viewport->southwest->lat,
+                  'west'  => $result->geometry->viewport->southwest->lng,
+                  'north' => $result->geometry->viewport->northeast->lat,
+                  'east'  => $result->geometry->viewport->northeast->lng
+                ];
+            } else {
                 // Fake bounds
-                $resultSet['bounds'] = array(
-                    'south' => $coordinates->lat,
-                    'west'  => $coordinates->lng,
-                    'north' => $coordinates->lat,
-                    'east'  => $coordinates->lng
-                );
+                $resultSet['bounds'] = [
+                  'south' => $coordinates->lat,
+                  'west'  => $coordinates->lng,
+                  'north' => $coordinates->lat,
+                  'east'  => $coordinates->lng
+                ];
+            }
+
+            $resultSet['name'] = $result->name;
+            if (null !== $result->opening_hours) {
+              $resultSet['opening_hours'] = [
+                'open_now' => $result->opening_hours->open_now,
+                'weekday_text' => $result->opening_hours->weekday_text,
+              ];
             }
 
             $results[] = array_merge($this->getDefaults(), $resultSet);

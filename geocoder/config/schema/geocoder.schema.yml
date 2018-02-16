@@ -33,6 +33,24 @@ geocoder.settings.plugins.googlemaps:
       type: boolean
       label: 'Use SSL'
 
+geocoder.settings.plugins.googleplace:
+  type: mapping
+  label: 'GooglePlace arguments'
+  mapping:
+    apikey:
+      type: string
+      label: 'The apikey'
+      description: '<a href="https://developers.google.com/places/web-service/get-api-key">Get a key for Google Places API Web Service</a>'
+    locale:
+      type: string
+      label: 'The locale'
+    region:
+      type: string
+      label: 'The region'
+    usessl:
+      type: boolean
+      label: 'Use SSL'
+
 geocoder.settings.plugins.arcgisonline:
   type: mapping
   label: 'ArcGISOnline arguments'

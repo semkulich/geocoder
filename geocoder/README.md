@@ -5,7 +5,7 @@ This is a complete rewrite of the Geocoder module, based on the
 
 # Features
 * Solid API based on [Geocoder PHP library](http://geocoder-php.org);
-* Geocode and Reverse Geocode using one or multiple Geocoder providers (ArcGISOnline, BingMaps, File, GoogleMaps, MapQuest, Nominatim, OpeneStreetMap, etc);
+* Geocode and Reverse Geocode using one or multiple Geocoder providers (ArcGISOnline, BingMaps, File, GoogleMaps, GooglePlace, MapQuest, Nominatim, OpeneStreetMap, etc);
 * Results can be dumped into multiple formats such as WKT, GeoJson, etc ...</li>
 * The Geocoder Provider and Dumper plugins are extendable through a custom module;</li>
 * Submodule Geocoder Field provides Drupal fields widgets and formatters, with even more options;</li>
@@ -55,11 +55,12 @@ From the Geocoder configuration page it is possible to setup custom options for 
 ## Geocode a string
 
 ```php
-$plugins = array('geonames', 'googlemaps', 'bingmaps');
+$plugins = array('geonames', 'googlemaps', 'googleplace', 'bingmaps');
 $address = '1600 Amphitheatre Parkway Mountain View, CA 94043';
 $options = array(
   'geonames' => array(), // array of options
   'googlemaps' => array(), // array of options
+  'googleplace' => array(), // array of options
   'bingmaps' => array(), // array of options
 );
 
@@ -69,13 +70,14 @@ $addressCollection = \Drupal::service('geocoder')->geocode($address, $plugins, $
 ## Reverse geocode coordinates
 
 ```php
-$plugins = array('freegeoip', 'geonames', 'googlemaps', 'bingmaps');
+$plugins = array('freegeoip', 'geonames', 'googlemaps', 'googleplace', 'bingmaps');
 $lat = '37.422782';
 $lon = '-122.085099';
 $options = array(
   'freegeoip' => array(), // array of options
   'geonames' => array(), // array of options
   'googlemaps' => array(), // array of options
+  'googleplace' => array(), // array of options
   'bingmaps' => array(), // array of options
 );
 
@@ -91,11 +93,12 @@ which is itself composed of ```Geocoder\Model\Address```.
 You can transform those objects into arrays. Example:
 
 ```php
-$plugins = array('geonames', 'googlemaps', 'bingmaps');
+$plugins = array('geonames', 'googlemaps', 'googleplace', 'bingmaps');
 $address = '1600 Amphitheatre Parkway Mountain View, CA 94043';
 $options = array(
   'geonames' => array(), // array of options
   'googlemaps' => array(), // array of options
+  'googleplace' => array(), // array of options
   'bingmaps' => array(), // array of options
 );
 
@@ -119,7 +122,7 @@ Get the list of available Dumper by doing:
 Here's an example on how to use a Dumper
 
 ```php
-$plugins = array('geonames', 'googlemaps', 'bingmaps');
+$plugins = array('geonames', 'googlemaps', 'googleplace', 'bingmaps');
 $address = '1600 Amphitheatre Parkway Mountain View, CA 94043';
 
 $addressCollection = \Drupal::service('geocoder')->geocode($address, $plugins);
@@ -129,7 +132,7 @@ $geojson = \Drupal::service('plugin.manager.geocoder.dumper')->createInstance('g
 There's also a dumper for GeoPHP, here's how to use it
 
 ```php
-$plugins = array('geonames', 'googlemaps', 'bingmaps');
+$plugins = array('geonames', 'googlemaps', 'googleplace', 'bingmaps');
 $address = '1600 Amphitheatre Parkway Mountain View, CA 94043';
 
 $addressCollection = \Drupal::service('geocoder')->geocode($address, $plugins);
